@@ -1,6 +1,6 @@
 ---
 title: "Economic Trends Analysis- Inelastic Goods, Population, and GDP"
-author: "Tony, Au Yik Hau (Netid: ya293)"
+author: "Tony, Au "
 date: "2025-11-25"
 output: 
   pdf_document:
