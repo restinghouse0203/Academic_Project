@@ -16,19 +16,20 @@ rm(list=ls())
 
 # Introduction
 
-This document implements a study to predict economic trends using alternative data. Specifically, we model population growth using consumption of daily commodities - Rice and explore the causal relationship between population growth and GDP growth. This project consisted of 5 parts:
+This project aims to predict economic trends using alternative data sources. Specifically, we modeled population growth using the consumption of a daily commodity, rice, and explored the causal relationship between population growth and GDP growth.
 
-- 1) Data exploration and cleaning 
+This project consisted of 5 parts:
 
-- 2) Regression in countries' rice consumption against population, starting with China 
+1. Data exploration and cleaning
+2. Regression analysis of national rice consumption against population, starting with China
+3. Regression of per capita rice consumption against a binary country classification, developed versus developing countries, including models with time-series errors
+4. IV (Instrumental Variable) methods to estimate the causal effect of rice consumption on economic growth, measured by GDP, through population dynamics
+5. Three-stage recursive VAR (Vector Autoregressive) model with shock decomposition analysis
 
-- 3) Regression in rice consumption per capita against binary group (developed countries vs developing counties); Regression model with time series errors 
+- Empirical results showed non-significant statistical evidence in support of the relationship between inelastic good consumption, population, and economic development.
 
-- 4) IV (Instrumental variable) method in est mating the causal relationships from rice consumption to country's Economic growth (GDP) through population 
+# 1. Data Exploration and Cleaning
 
-- 5) 3-staged Recursive VAR (Vector Auto-Regressive) model and variable's shock decomposition.
-
-# 1) Data exploration and cleaning
 ## Setup
 
 Load necessary libraries.
@@ -61,14 +62,13 @@ library(purrr)
 library(forecast)
 ```
 
-## Step 1: Data Sourcing (China)
+## 1.1 Data Sourcing: China
 
-We gather data for:
+We gathered data for:
 1.  **Population**: World Bank indicator $SP.POP.TOTL$.
 2.  **GDP**: World Bank indicator $NY.GDP.MKTP.CD$ (Current US) or $NY.GDP.MKTP.KD$ (Constant 2015 US).
 3.  **Rice Consumption**: FAOSTAT.
 
-Note: add section about data clearing
 ```{r, message=FALSE, warning=FALSE}
 # 1. Load Population and GDP data for China from World Bank
 wb_data_china <- read_csv("World_bank_China_population_GDP.csv")
@@ -78,7 +78,8 @@ head(wb_data_china)
 rice_data_china <- read_csv("FAOSTAT_data_China_rice.csv")
 ```
 
-### 1.1 Data clearing
+## 1.2 Data Cleaning: China
+
 ```{r, message=FALSE, warning=FALSE}
 # 3. Select year and Value, rename for clarity
 rice_data_china <- rice_data_china %>% 
@@ -94,8 +95,8 @@ china_combined <- na.omit(china_combined) # omit N/A value
 head(china_combined)
 ```
 
-#### Data Description (China)
-The *china_combined* data frame contained the 3 columns of annual data, population, GDP and Rice production (assume the supply is approximate equal to the local demand, since Asia consume the most rice of the world), from China from 1990 to 2022. The unit are people, usd, tonne. 
+### Data Description: China
+The `china_combined` data frame contains 3 columns of annual data: population, GDP, and Rice production (assuming supply is approximately equal to local demand, given that Asia consumes the most rice globally) for China from 1990 to 2022. The units are people, USD, and tonnes.
 
 ```{r, message=FALSE, warning=FALSE}
 # Loading data
@@ -106,7 +107,8 @@ rice_data_multi <- read_csv("FAOSTAT_data_multi_rice.csv")
 head(rice_data_multi)
 ```
 
-### Data Cleaning
+## 1.3 Data Cleaning: Multiple Countries
+
 ```{r, message=FALSE, warning=FALSE}
 countries <- c("United States of America", "Japan", "France", "China", "India", "Brazil")
 developed_countries <- c("United States of America", "Japan", "France")
@@ -132,7 +134,8 @@ multi_combined <- wb_data_multi %>%
   dplyr::select(year, country, developed, population, GDP, rice_consumption)
 ```
 
-### Data description (Multiple countries)
+## 1.4 Data Description: Multiple Countries
+
 ```{r, message=FALSE, warning=FALSE}
 # Plot all six countries on the same axes with a label for each series
 last_year_point <- multi_combined %>%
@@ -202,11 +205,10 @@ ggplot(multi_combined, aes(x = year, y = population, color = country, group = co
     color = "Country"
   )
 ```
-* We noticed that China and India consumed significantly more rice compared to other countries, one possible reason is due their population size. 
 
-* The upward trend showed some association with the population growth. China and India recorded a upward trend in population which synchronize with the rising consumption of rice, which is an indicator of the daily inelastic demand.
+* We observed that China and India consume significantly more rice compared to other countries, likely due to their large population sizes.
+* The upward trend suggests an association with population growth. China and India recorded an upward trend in population which synchronizes with the rising consumption of rice, indicating daily inelastic demand.
 
-* The Scatter plot
 ```{r}
 # Base scatter plot
 ggplot(multi_combined, aes(x = log(population), y = log(rice_consumption), color = country)) +
@@ -215,16 +217,18 @@ ggplot(multi_combined, aes(x = log(population), y = log(rice_consumption), color
        x = "Log Population", y = "Log Rice Consumption") +
   theme_minimal()
 ```
-From the scatterplot, we noticed the data are clustered by country, however the data of China and India clustered together so there exist some possibility to model the association by the binary classification of country's development status.
 
-# 2) Regression in countries' rice consumption against population
-## Step 2.1: OLS & GAM Regression (China)
+The scatterplot shows clustering by country. However, the data for China and India cluster together, suggesting a possibility to model the association using a binary classification of the country's development status.
 
-We analyze the relationship between Rice Production and Population.
+# 2. Regression Analysis: National Rice Consumption vs. Population
 
-**Hypothesis**: Population size is linearly associated with consumption of inelastic goods.
+## 2.1 OLS and GAM Regression (China)
 
-### * OLS modeling
+We analyzed the relationship between Rice Production and Population.
+
+**Hypothesis**: Population size is linearly associated with the consumption of inelastic goods.
+
+### OLS Modeling
 ```{r, message=FALSE, warning=FALSE}
 model_step2 <- lm(log(china_combined$rice_quantity) ~ log(china_combined$pop))
 model_nonlin_step2 <- gam(log(china_combined$rice_quantity) ~ s(log(china_combined$pop)))
@@ -240,7 +244,7 @@ ggplot(china_combined, aes(x = log(pop), y = log(rice_quantity))) +
   theme_minimal()
 ```
 
-### * GAM Modeling
+### GAM Modeling
 ```{r, message=FALSE, warning=FALSE}
 model_nonlin_step2 <- gam(log(china_combined$rice_quantity) ~ s(log(china_combined$pop)))
 
@@ -254,31 +258,16 @@ ggplot(china_combined, aes(x = log(pop), y = log(rice_quantity))) +
        x = "Log Population", y = "Log Production") +
   theme_minimal()
 ```
-We noticed the parameter were all highly significant, GAM can fit the non-linear data relationship between log rice consumption and log population better visually.
+The parameters were found to be highly significant. GAM can fit the non-linear data relationship between log rice consumption and log population better visually.
 
-# Step 2.2: Extend to Other Commodities and Countries
+# 3. Regression of Per Capita Rice Consumption and Binary Classification
 
-We now extend the data fetching to multiple countries. We will select a few representative countries for "Developed" vs "Underdeveloped" comparison later.
-
-Countries:
--   **Developed**: USA, Japan (JP), France (FR)
--   **Developing/Emerging**: China (CN), India (IN), Brazil (BR)
-
-Commodities:
--   We load data for Rice from FAOSTAT
-
-
-# 3) Classification and Interaction Analysis
-
-We classify countries based on income levels. WDI often provides metadata, or we can define manually for this subset.
+We classified countries based on income levels to compare "Developed" vs "Developing" trends.
 
 1.  **Classify**: Developed vs Underdeveloped (Developing).
 2.  **Model**: $Consumption = \beta_0 + \beta_1 Population + \beta_2 Developed + \beta_3 (Population \times Developed) + \epsilon$
 
-Note: might try GAM, time-variant error term model (gls function) plus add plot on ADF 
-
-
-### **Model 1: Simple Regression**
+## 3.1 Model 1: Simple Regression
 
 **Description**:  
 This model investigates how rice consumption varies with population size across all countries and years. The relationship is estimated using three approaches:
@@ -288,6 +277,7 @@ This model investigates how rice consumption varies with population size across 
 - **GLS (Generalized Least Squares) with AR(1) errors**: Accounts for time-series correlation in residuals using a country-specific autoregressive process.
 
 **Model Formulae**:
+
 - **OLS / GLS:**
 $$
   \log(\text{RiceConsumption}_{it}) = \beta_0 + \beta_1 \log(\text{Population}_{it}) + \varepsilon_{it}
@@ -300,36 +290,8 @@ $$
 $$
   Where $f()$ denotes a smooth, potentially nonlinear function estimated from the data.
 
----
+### Analysis (Consumption ~ Population)
 
-### **Model 2: Interaction Regression**
-
-**Description**:  
-This model tests if the relationship between rice consumption and population differs between Developed and Developing countries, by introducing a binary indicator for "developed" and an interaction term.
-
-- **Full Model**: Allows both intercept and slope to be different for developed countries.
-- **Short Model**: Allows only the intercept to vary with development status; assumes the same slope for all.
-
-**Model Formulae (LaTeX):**
-
-- **Full Model (with interaction):**
-$$
-  \log(\text{RiceConsumption}_{it}) = \beta_0 + \beta_1 \log(\text{Population}_{it}) + \beta_2\,\text{Developed}_i + \beta_3\,\big[\log(\text{Population}_{it}) \times \text{Developed}_i\big] + \varepsilon_{it}
-$$
-  Where $\text{Developed}_i = 1$ for developed countries, 0 otherwise.
-
-- **Short Model (without interaction):**
-$$
-  \log(\text{RiceConsumption}_{it}) = \beta_0 + \beta_1 \log(\text{Population}_{it}) + \beta_2\,\text{Developed}_i + \varepsilon_{it}
-$$
-
-- **GAM Full Model:**
-$$
-  \log(\text{RiceConsumption}_{it}) = \beta_0 + f_0\big(\log(\text{Population}_{it})\big) \cdot \mathbb{1}[\text{Developed}_i=0] + 
-  f_1\big(\log(\text{Population}_{it})\big) \cdot\mathbb{1}[\text{Developed}_i=1] + \varepsilon_{it}
-$$
-
-### ** Model 1**: Simple Regression (Consumption ~ Population)
 Hypothesis: Rice consumption scales with population size.
 
 ```{r, message=FALSE, warning=FALSE}
@@ -354,7 +316,7 @@ summary(m1_ols)
 summary(m1_gam)
 summary(m1_gls)
 ```
-* The model parameters are all statistical significant
+* The model parameters were all statistically significant.
 
 ```{r}
 # Base scatter plot
@@ -372,12 +334,36 @@ ggplot(multi_combined, aes(x = log(population), y = log(rice_consumption), color
   theme_minimal()
 ```
 
-* From plot, we noticed an upward trend in rice consumption and population
+* The plot indicates an upward trend in rice consumption and population.
 
-### ** Model 2 :** Interaction Regression (Consumption ~ Population * Developed)
-Hypothesis: The relationship between population and rice consumption differs between Developed and Developing countries.
-- Full Model: Consumption ~ Pop + Developed + Pop*Developed
-- Short Model (for comparison): Consumption ~ Pop + Developed (no interaction)
+## 3.2 Model 2: Interaction Regression
+
+**Description**:  
+This model tests if the relationship between rice consumption and population differs between Developed and Developing countries by introducing a binary indicator for "developed" and an interaction term.
+
+- **Full Model**: Consumption ~ Pop + Developed + Pop*Developed
+- **Short Model**: Consumption ~ Pop + Developed (no interaction)
+
+**Model Formulae (LaTeX):**
+
+- **Full Model (with interaction):**
+$$
+  \log(\text{RiceConsumption}_{it}) = \beta_0 + \beta_1 \log(\text{Population}_{it}) + \beta_2\,\text{Developed}_i + \beta_3\,\big[\log(\text{Population}_{it}) \times \text{Developed}_i\big] + \varepsilon_{it}
+$$
+  Where $\text{Developed}_i = 1$ for developed countries, 0 otherwise.
+
+- **Short Model (without interaction):**
+$$
+  \log(\text{RiceConsumption}_{it}) = \beta_0 + \beta_1 \log(\text{Population}_{it}) + \beta_2\,\text{Developed}_i + \varepsilon_{it}
+$$
+
+- **GAM Full Model:**
+$$
+  \log(\text{RiceConsumption}_{it}) = \beta_0 + f_0\big(\log(\text{Population}_{it})\big) \cdot \mathbb{1}[\text{Developed}_i=0] + 
+  f_1\big(\log(\text{Population}_{it})\big) \cdot\mathbb{1}[\text{Developed}_i=1] + \varepsilon_{it}
+$$
+
+### Analysis
 
 ```{r, message=FALSE, warning=FALSE}
 # 2.1 OLS
@@ -386,9 +372,8 @@ m2_ols_short <- lm(log(rice_consumption) ~ log(population) + factor(developed), 
 print(stargazer(m2_ols_full, type = "text", title = "OLS Interaction Model Results"))
 print(stargazer(m2_ols_short, type = "text", title = "OLS Interaction Model Results"))
 ```
-We noticed both long and short model are highly significant, there is not much difference in adding the interaction term
+Both the long and short models were highly significant; adding the interaction term yielded little difference.
 
-- **GAM Full Model:** 
 ```{r, message=FALSE, warning=FALSE}
 # 2.2 GAM
 # We fit separate smooths for each level of 'developed' to capture interaction non-linearly.
@@ -416,9 +401,9 @@ ggplot(multi_combined, aes(x = log(population), y = log(rice_consumption), color
        x = "Log Population", y = "Log Rice Consumption", color = "Status", linetype = "Status") +
   theme_minimal()
 ```
-* From the plot we notice the data of different countries clusterd and labeling them by developement status doesn't help improving the problem. Moreover, there exist an intuitive explanation "The more people in your country, the more consumption in rice". 
 
-* To investigate this hypothesis, we construct a new variable "rice consumption per capita" to hopefully smooth out the absolute difference across countries and achieve an "apple-to-apple" comparison.
+* The plot shows data clustering by country, and labeling them by development status does not significantly clarify the relationship. There exists an intuitive explanation: "The more people in your country, the higher the rice consumption."
+* To investigate this hypothesis, we constructed a new variable "rice consumption per capita" to normalize the differences across countries and achieve a standardized comparison.
 
 ```{r, message=FALSE, warning=FALSE}
 # 2.3 GLM on consumption per capita
@@ -461,12 +446,14 @@ ggplot(multi_combined, aes(x = log(population), y = log(rice_consumption/populat
 summary(m2_glm_test)
 
 ```
-* From the histogram, we notice developing countries consumed more than 4 times of the developed countries. From the plot, we notice regression line for developing country is higher than developed country but the slope is zero, indicting there is two group of average consumption that hints the significant effect of the binary label which was verified by the model summary. 
 
-### **Model 3: Regression model with time series errors **
-* We noticed there might exist some autocorrelation in the data, so we will verify the belief through ADF test and construct a regression model with time series error.
+* The bar chart shows that developing countries consume more than four times the amount of developed countries. The plot indicates the regression line for developing countries is higher than for developed countries, but the slope is zero, indicating two groups of average consumption. This hints at a significant effect of the binary label, which was verified by the model summary.
 
-- ** Time-series data stationarity test: ADF (Augmented Dickey-Fuller) Test **
+## 3.3 Regression Model with Time-Series Errors
+
+Suspecting autocorrelation in the data, we verified this through the Augmented Dickey-Fuller (ADF) test and constructed a regression model with time-series errors.
+
+### Time-series Data Stationarity Test: ADF Test
 ```{r, message=FALSE, warning=FALSE}
 # Plot the series
 china_long <- china_combined %>%
@@ -502,9 +489,9 @@ if(length(china_combined$pop) > 10) {
   print(paste("ADF p-value for (log diff) Rice Consumption per capita:", adf_rice_pc$p.value))
 }
 ```
-Notice that the result is not significant, even after applying log-differencing, indicating there might exist unit-root in the series (i.e. non-stationary). We now construct a regression model with time series error to test that.
+The results were not significant, even after log-differencing, indicating the presence of a unit root in the series (i.e., non-stationary). We now construct a regression model with time-series errors to test that.
 
-- ** GLS with AR(1) error term **
+### GLS with AR(1) Error Term
 ```{r, message=FALSE, warning=FALSE}
 # 2.3 GLS
 m2_gls_test <- gls(log(rice_consumption/population) ~ factor(developed),
@@ -539,12 +526,13 @@ ggplot(multi_combined, aes(x = log(population), y = log(rice_consumption/populat
 
 print(stargazer(m2_gls_test, type = "text", title = "GLS Interaction Model Results"))
 ```
-* (GLS) Result Interpretation
-We notice that the model parameter is not significant anymore, meaning the association of country development binary variable to rice consumption is low, indicting the previous result was a spurious regression that disguised by autocorrelation. It shows us that despite the regression model looks very similar visually, but the subtle violation of the assumption can break the entire relationship.
 
-* We then investigate more deeply into the data to see the time-series properties.
+### GLS Result Interpretation
+The model parameters lost significance, suggesting the previous association was spurious and driven by autocorrelation. This demonstrates that despite the regression model looking very similar visually, the violation of assumptions can invalidate the relationship.
 
-- * Unit-root stationarity test
+We then investigated more deeply into the data to see the time-series properties.
+
+### Unit-root Stationarity Test
 ```{r, message=FALSE, warning=FALSE}
 # ADF for population and rice_consumption by country
 adf_results <- multi_combined %>%
@@ -566,9 +554,9 @@ adf_results_diff <- multi_combined %>%
 
 print(adf_results_diff)
 ```
-* We notice there some countries exhibited unit-root non-stationarity.
+Some countries exhibited unit-root non-stationarity.
 
-```{r}
+```{r, fig.height=15}
 # Prepare wide data with all variables
 plot_data <- multi_combined %>%
   group_by(country) %>%
@@ -624,7 +612,7 @@ plot_acf_country <- function(df, country_name) {
     scale_fill_manual(values = c("Population Growth Rate"="blue", "Rice Consumption Growth Rate"="red"))
   
   library(patchwork) # for nice composition
-  combined <- (p1 | p2 | p3) + plot_annotation(title = paste("ACF plots for", country_name))
+  combined <- (p1 / p2 / p3) + plot_annotation(title = paste("ACF plots for", country_name))
   print(combined)
 }
 
@@ -636,9 +624,9 @@ multi_combined %>%
     country_name = unique(.x$country)
   ))
 ```
-* We noticed the ACF take roughly 10 lags (10 years) to go to zero and there exist some cycle in autocorrelation. Even after taking log transform, the data still exhibit alternating autocorrelation, indicting the data is not stationary and the statistical significant obtained earlier is spurious from the autocorrelation.
+The ACF takes roughly 10 lags (10 years) to go to zero, and there exist some cycles in autocorrelation. Even after taking the log transform, the data still exhibit alternating autocorrelation, indicating the data is not stationary and the statistical significance obtained earlier is spurious.
 
-# 4) Instrumental Variable (IV) Exploration
+# 4. Instrumental Variable (IV) Methods
 
 **Model Description & Assumptions**:
 We explore using **Rice Consumption** as an instrumental variable (IV) for **Population** to estimate the causal effect of population growth on **GDP**.
@@ -683,12 +671,13 @@ summary(iv_model, diagnostics = TRUE)
 ```
 **Interpretation**:
 
-- **Weak Instruments**: The diagnostic test checks if rice consumption is a strong predictor of population. Here, the non-significant test statistic (\(p > 0.05\)) suggests relevance doesn't hold.
+- **Weak Instruments**: The diagnostic test checks if rice consumption is a strong predictor of population. Here, the non-significant test statistic ($p > 0.05$) suggests relevance doesn't hold.
 
-- **Wu-Hausman**: Tests whether the OLS and IV estimates are significantly different. Here, \(p > 0.05\); endogeneity is not present, and OLS is not inconsistent.
+- **Wu-Hausman**: Tests whether the OLS and IV estimates are significantly different. Here, $p > 0.05$; endogeneity is not present, and OLS is not inconsistent.
 
 - **Coefficient**: The IV coefficient for population is larger than OLS; this suggests OLS underestimated the effect (possibly due to measurement error or omitted variable bias). However, due to the exclusion restriction violation, the IV estimate may capture the direct effect of consumption on GDP, inflating the result.
-# 5) Time Series Analysis (Vector Autoregression)
+
+# 5. Three-Stage Recursive VAR Model
 
 **Model Description & Assumptions**:
 We use a **Vector Autoregression (VAR)** model to capture the dynamic interrelationships between Rice Consumption, GDP, and Population. Unlike single-equation models, VAR treats all variables as endogenous.
@@ -775,9 +764,11 @@ plot(irf_result)
 fevd_res <- fevd(var_model, n.ahead = 10)
 plot(fevd_res)
 ```
+
+
 **Interpretation**:
 
-- **Lag Selection**: We choose the lag \( p \) (e.g., 1 or 2 years) that minimizes the AIC to capture dynamics without overfitting.
+- **Lag Selection**: We choose the lag $p$ (e.g., 1 or 2 years) that minimizes the AIC to capture dynamics without overfitting.
 - **Granger Causality**: The p-value is > 0.05; past values of Rice Consumption do not contain statistically significant information to predict current GDP, supporting a temporal link.
 - **Impulse Response (IRF)**:
     - The plots show the reaction of GDP and Population over 10 years to a one-standard-deviation shock in Rice Consumption.
@@ -785,14 +776,16 @@ plot(fevd_res)
     - The confidence interval (dotted lines) includes zero; thus, the response is not significant.
 - **Variance Decomposition**: Tells us "what drives what." Population was explained by a growing share of GDP variance over time, confirming a strong linkage between economic growth and demographic trends. On the other hand, rice consumption was weakly explained by a small but growing share of population variance over time, confirming a mild linkage between inelastic daily commodities and demographic trends. Whereas the rice consumption shock did not explain any variable.
 
-# 6) Summary
+# 6. Conclusion
 
 We notice the data exhibited clustering and non-homogeneity across countries and autocorrelation; traditional regression methods result in spurious regression. The data clustering cannot be handled by simply labeling with binary development status, and the autocorrelation still persists after taking log differencing.
 
 After accounting for the time series properties (GLS model using AR(1) error term), the result is not significant anymore. To conclude, we did not find any statistically significant evidence supporting the association between rice consumption and demographic or economic trends.
 
-# 7) Area for Improvement
+- Empirical results showed non-significant statistical evidence in support of the relationship between inelastic good consumption, population, and economic development.
+
+# 7. Areas for Improvement
 
 1. **Non-independent data**: Countries like China experienced significant change in the past 50 years relative to other countries. It might not be sufficient to only classify them based on development status; other categorical labels might be needed. Moreover, we might try to replace China with another country with more "stable" data.
-2. **Explicit link between rice consumption and GDP**: In the formula for calculating GDP (\(GDP = C + I + G + NX\)), consumption is a direct component, which makes the IV econometric model exclusion restriction likely violated. Other econometric approaches should be considered.
+2. **Explicit link between rice consumption and GDP**: In the formula for calculating GDP ($GDP = C + I + G + NX$), consumption is a direct component, which makes the IV econometric model exclusion restriction likely violated. Other econometric approaches should be considered.
 3. **Time-series lagged relationship**: The VAR model assumed a recursive relationship from consumption to GDP, then to population. However, this project’s data is annual, meaning the lagged response might happen within a year that we can't capture using this annual VAR model. Additionally, there is a question about convergence rate from consumption to GDP since GDP is directly related to consumption. One possible alternative data source would be using demand data instead of consumption data to forecast market movement, similar to using the VIX index in the stock market (volatility index).
